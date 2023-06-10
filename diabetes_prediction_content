@@ -1,0 +1,775 @@
+Business Objective
+간단한 설문으로 건강상태 예측, 위험을 조기식볗
+
+당뇨 예측
+# This Python 3 environment comes with many helpful analytics libraries installed
+# It is defined by the kaggle/python docker image: https://github.com/kaggle/docker-python
+# For example, here's several helpful packages to load in 
+
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+
+# Input data files are available in the "../input/" directory.
+# For example, running this (by clicking run or pressing Shift+Enter) will list the files in the input directory
+
+from subprocess import check_output
+print(check_output(["ls", "./input"]).decode("utf8"))
+
+# Any results you write to the current directory are saved as output.
+d
+demographic.csv
+diet.csv
+examination.csv
+labs.csv
+medications.csv
+questionnaire.csv
+
+import pandas as pd
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib as matplot
+
+import re
+import sklearn
+
+import warnings
+warnings.filterwarnings("ignore")
+
+%matplotlib inline
+Dataset Merge & select attribute
+df1 = pd.read_csv('./input/labs.csv')
+df2 = pd.read_csv('./input/examination.csv')
+df3 = pd.read_csv('./input/demographic.csv')
+df4 = pd.read_csv('./input/diet.csv')
+df5 = pd.read_csv('./input/questionnaire.csv')
+
+df2.drop(['SEQN'], axis = 1, inplace=True)
+df3.drop(['SEQN'], axis = 1, inplace=True)
+df4.drop(['SEQN'], axis = 1, inplace=True)
+df5.drop(['SEQN'], axis = 1, inplace=True)
+
+df = pd.concat([df1, df2], axis=1, join='inner')
+df = pd.concat([df, df3], axis=1, join='inner')
+df = pd.concat([df, df4], axis=1, join='inner')
+df = pd.concat([df, df5], axis=1, join='inner')
+
+#sel = VarianceThreshold(threshold=(.8 * (1 - .8)))
+#sel.fit_transform(df)
+
+df.describe()
+SEQN	URXUMA	URXUMS	URXUCR.x	URXCRS	URDACT	WTSAF2YR.x	LBXAPB	LBDAPBSI	LBXSAL	...	WHD080U	WHD080L	WHD110	WHD120	WHD130	WHD140	WHQ150	WHQ030M	WHQ500	WHQ520
+count	9813.000000	8052.000000	8052.000000	8052.000000	8052.000000	8052.000000	3329.000000	3145.000000	3145.000000	6553.000000	...	14.0	28.0	4036.000000	4842.000000	2667.000000	5879.000000	5800.000000	1424.000000	1424.000000	1424.000000
+mean	78644.559971	41.218854	41.218854	121.072529	10702.811525	41.905695	78917.195254	85.898569	0.858986	4.282085	...	35.0	40.0	413.440287	567.920074	373.831646	315.447355	574.222069	2.586376	2.295646	1.747893
+std	2938.592266	238.910226	238.910226	78.574882	6946.019595	276.261093	71088.020067	25.595258	0.255953	0.343649	...	0.0	0.0	1511.368399	1975.492188	1716.831150	1075.040013	7288.930842	0.782529	1.210905	0.707600
+min	73557.000000	0.210000	0.210000	5.000000	442.000000	0.210000	0.000000	20.000000	0.200000	2.400000	...	35.0	40.0	75.000000	55.000000	50.000000	85.000000	10.000000	1.000000	1.000000	1.000000
+25%	76092.000000	4.500000	4.500000	60.000000	5304.000000	5.020000	33217.405018	68.000000	0.680000	4.100000	...	35.0	40.0	140.000000	125.000000	63.000000	155.000000	25.000000	3.000000	1.000000	1.000000
+50%	78643.000000	8.400000	8.400000	106.000000	9370.400000	7.780000	56397.702304	84.000000	0.840000	4.300000	...	35.0	40.0	165.000000	150.000000	66.000000	185.000000	38.000000	3.000000	2.000000	2.000000
+75%	81191.000000	17.625000	17.625000	163.000000	14409.200000	15.295000	99356.561999	101.000000	1.010000	4.500000	...	35.0	40.0	198.000000	180.000000	70.000000	225.000000	53.000000	3.000000	3.000000	2.000000
+max	83731.000000	9600.000000	9600.000000	659.000000	58255.600000	9000.000000	395978.465792	234.000000	2.340000	5.600000	...	35.0	40.0	9999.000000	9999.000000	9999.000000	9999.000000	99999.000000	9.000000	9.000000	9.000000
+8 rows × 1781 columns
+
+questionnaire.csv 에 DIQ010, DID040 모두 당뇨병 관련 데이터인데 둘 중 어떤 것 사용할까 판단
+
+DIQ010를 사용하기로 함 (의사에게 당뇨 진단을 받은 적이 있는지 설문)
+
+count_A = df['DIQ010'].value_counts() # 의사에게 당뇨 진단을 받은 적이 있는지 2: 없다, 1: 있다 (추정)
+print(count_A)
+2.0    8528
+1.0     713
+3.0     175
+9.0       5
+7.0       1
+Name: DIQ010, dtype: int64
+count_A = df['DID040'].value_counts() # 당뇨 진단 당시 나이
+print(count_A)
+50.0    48
+40.0    36
+45.0    36
+55.0    36
+60.0    29
+        ..
+18.0     1
+79.0     1
+78.0     1
+4.0      1
+1.0      1
+Name: DID040, Length: 78, dtype: int64
+사용할 데이터(column) 선택
+from sklearn.feature_selection import VarianceThreshold
+
+df.dropna(axis=1, how='all')
+df.dropna(axis=0, how='all')
+
+df = df.rename(columns = {'SEQN' : 'ID', # ID
+                          'RIAGENDR' : 'Gender', # 설명
+                          'INDFMPIR' : 'Family_income', # 소득
+                          'LBXGH' : 'GlycoHemoglobin', # 당화혈색소
+                          'BMXARMC' : 'ArmCircum', # 팔 둘레
+                          'BMDAVSAD' : 'SaggitalAbdominal', # 복부 둘레
+                          'MGDCGSZ' : 'GripStrength', # 악력
+                          'ALQ130' : 'Alcohol',  # 일주일간 알콜 섭취 횟수
+                          'SLD010H' : 'Sleep_time', # 수면 시간
+                          'SMQ040' : 'Smoke', # 흡연 유무
+                          'PAQ715' : 'Video_game', # 비디오 게임 플레이 시간
+                          'WHD010':'Height', # 키
+                          'WHD020':'Weight', # 몸무게 
+                          'MCQ300B' : 'Family_history_of_asthma', # 천식 가족력
+                          'MCQ300C' : 'Family_history_of_diabetes', # 당뇨 가족력
+                          'DIQ010' : 'Diabetes'}) # 당뇨
+
+df = df.loc[:, ['ID', 'Gender', 'Family_income', 'ArmCircum', 
+                'SaggitalAbdominal', 'GripStrength', 'Alcohol', 'Sleep_time','Smoke', 'Video_game', 'Height', 'Weight', 'Family_history_of_asthma', 'Family_history_of_diabetes', 'GlycoHemoglobin', 'Diabetes']]
+
+df.describe()
+ID	Gender	Family_income	ArmCircum	SaggitalAbdominal	GripStrength	Alcohol	Sleep_time	Smoke	Video_game	Height	Weight	Family_history_of_asthma	Family_history_of_diabetes	GlycoHemoglobin	Diabetes
+count	9813.000000	9813.000000	9051.000000	9301.000000	7218.000000	7677.000000	3463.000000	6227.000000	2484.000000	9111.000000	6205.000000	6196.000000	8264.000000	5561.000000	6643.000000	9422.000000
+mean	78644.559971	1.509426	2.253101	28.485765	21.114034	63.054891	3.534796	7.050104	2.138889	3.154209	162.013860	255.694480	1.887706	1.737098	5.642556	1.947145
+std	2938.592266	0.499937	1.635458	7.961971	4.963949	25.098439	29.410605	3.398200	0.941948	3.156933	968.854791	872.943399	1.052063	1.136513	1.004850	0.346588
+min	73557.000000	1.000000	0.000000	10.400000	10.100000	8.000000	1.000000	2.000000	1.000000	0.000000	48.000000	75.000000	1.000000	1.000000	3.500000	1.000000
+25%	76092.000000	1.000000	0.870000	22.600000	17.300000	45.600000	1.000000	6.000000	1.000000	0.000000	63.000000	143.000000	2.000000	1.000000	5.200000	2.000000
+50%	78643.000000	2.000000	1.710000	29.300000	20.700000	60.300000	2.000000	7.000000	3.000000	2.000000	66.000000	170.000000	2.000000	2.000000	5.400000	2.000000
+75%	81191.000000	2.000000	3.610000	34.000000	24.400000	80.700000	3.000000	8.000000	3.000000	8.000000	69.000000	200.000000	2.000000	2.000000	5.800000	2.000000
+max	83731.000000	2.000000	5.000000	59.400000	40.100000	162.800000	999.000000	99.000000	3.000000	8.000000	9999.000000	9999.000000	9.000000	9.000000	17.500000	9.000000
+Data Exploration
+# missing vaule 몇개인지 확인
+for column in df.columns:
+    null_count = df[column].isnull().sum()
+    print("{}: {}".format(column, null_count))
+ID: 0
+Gender: 0
+Family_income: 762
+ArmCircum: 512
+SaggitalAbdominal: 2595
+GripStrength: 2136
+Alcohol: 6350
+Sleep_time: 3586
+Smoke: 7329
+Video_game: 702
+Height: 3608
+Weight: 3617
+Family_history_of_asthma: 1549
+Family_history_of_diabetes: 4252
+GlycoHemoglobin: 3170
+Diabetes: 391
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Get the number of columns in the DataFrame
+num_columns = len(df.columns)
+
+# Calculate the number of rows and columns for subplots
+num_rows = (num_columns + 2) // 3
+num_cols = min(num_columns, 3)
+
+# Create subplots with the specified layout
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 15))
+
+# Iterate over the columns and create box plots
+for idx, column in enumerate(df.columns):
+    ax = axs[idx // num_cols, idx % num_cols]
+    sns.boxplot(x=df[column], ax=ax)
+    ax.set_xlabel(column)
+    # ax.set_title('Box Plot of {}'.format(column))
+
+# Remove empty subplots if necessary
+if num_columns % 3 != 0:
+    for idx in range(num_columns, num_rows * num_cols):
+        fig.delaxes(axs.flatten()[idx])
+
+# Adjust the spacing between subplots
+fig.tight_layout()
+
+# Show the plots
+plt.show()
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Get the number of columns in the DataFrame
+num_columns = len(df.columns)
+
+# Calculate the number of rows and columns for subplots
+num_rows = (num_columns + 2) // 3
+num_cols = min(num_columns, 3)
+
+# Create subplots with the specified layout
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 3 * num_rows))
+
+# Iterate over the columns and create distribution plots
+for idx, column in enumerate(df.columns):
+    ax = axs[idx // num_cols, idx % num_cols]
+    sns.distplot(df[column], kde=False, ax=ax)
+    ax.set_xlabel(column)
+    ax.set_ylabel('Frequency')
+    # ax.set_title('Distribution of {}'.format(column))
+
+# Remove empty subplots if necessary
+if num_columns % 3 != 0:
+    for idx in range(num_columns, num_rows * num_cols):
+        fig.delaxes(axs.flatten()[idx])
+
+# Adjust the spacing between subplots
+fig.tight_layout()
+
+# Show the plots
+plt.show()
+
+Alcohol, Sleep_time, Height, Weight에 outlier가 있는 것을 확인
+
+smoke, Family_history_of_asthma, Family_history_of_diabetes, Diabetes은 Yes/No 응답이라 값이 2개만 있어야 하는데 그렇지 않음
+
+Preprocessing
+df.describe()
+ID	Gender	Family_income	ArmCircum	SaggitalAbdominal	GripStrength	Alcohol	Sleep_time	Smoke	Video_game	Height	Weight	Family_history_of_asthma	Family_history_of_diabetes	GlycoHemoglobin	Diabetes
+count	9813.000000	9813.000000	9051.000000	9301.000000	7218.000000	7677.000000	3463.000000	6227.000000	2484.000000	9111.000000	6205.000000	6196.000000	8264.000000	5561.000000	6643.000000	9422.000000
+mean	78644.559971	1.509426	2.253101	28.485765	21.114034	63.054891	3.534796	7.050104	2.138889	3.154209	162.013860	255.694480	1.887706	1.737098	5.642556	1.947145
+std	2938.592266	0.499937	1.635458	7.961971	4.963949	25.098439	29.410605	3.398200	0.941948	3.156933	968.854791	872.943399	1.052063	1.136513	1.004850	0.346588
+min	73557.000000	1.000000	0.000000	10.400000	10.100000	8.000000	1.000000	2.000000	1.000000	0.000000	48.000000	75.000000	1.000000	1.000000	3.500000	1.000000
+25%	76092.000000	1.000000	0.870000	22.600000	17.300000	45.600000	1.000000	6.000000	1.000000	0.000000	63.000000	143.000000	2.000000	1.000000	5.200000	2.000000
+50%	78643.000000	2.000000	1.710000	29.300000	20.700000	60.300000	2.000000	7.000000	3.000000	2.000000	66.000000	170.000000	2.000000	2.000000	5.400000	2.000000
+75%	81191.000000	2.000000	3.610000	34.000000	24.400000	80.700000	3.000000	8.000000	3.000000	8.000000	69.000000	200.000000	2.000000	2.000000	5.800000	2.000000
+max	83731.000000	2.000000	5.000000	59.400000	40.100000	162.800000	999.000000	99.000000	3.000000	8.000000	9999.000000	9999.000000	9.000000	9.000000	17.500000	9.000000
+# 설문 데이터로 모델을 만드는 것임 -> 응답자의 성실도가 모델의 신뢰에 영향을 끼침
+# 응답에 빈칸이 4개 이상이라면 해당 row drop
+
+df.dropna(thresh=df.shape[1]-4, inplace=True)
+df.describe()
+ID	Gender	Family_income	ArmCircum	SaggitalAbdominal	GripStrength	Alcohol	Sleep_time	Smoke	Video_game	Height	Weight	Family_history_of_asthma	Family_history_of_diabetes	GlycoHemoglobin	Diabetes
+count	5726.000000	5726.000000	5320.000000	5544.000000	4544.000000	4775.000000	3392.000000	5724.000000	2458.000000	5726.000000	5707.000000	5701.000000	5726.000000	5229.000000	4143.000000	5726.000000
+mean	78678.357143	1.517639	2.449746	29.149152	21.091835	63.314387	3.555425	7.029874	2.139138	3.322214	163.478185	251.708998	1.930318	1.734940	5.629833	1.916346
+std	2912.758050	0.499732	1.652269	7.701370	4.966631	25.123546	29.715160	3.303663	0.942035	3.201815	975.683586	847.044099	1.091067	1.134645	0.977459	0.390483
+min	73557.000000	1.000000	0.000000	10.400000	10.100000	8.000000	1.000000	2.000000	1.000000	0.000000	48.000000	75.000000	1.000000	1.000000	3.500000	1.000000
+25%	76189.250000	1.000000	1.020000	24.100000	17.300000	46.050000	1.000000	6.000000	1.000000	0.000000	63.000000	145.000000	2.000000	1.000000	5.200000	2.000000
+50%	78700.000000	2.000000	2.020000	29.900000	20.700000	60.600000	2.000000	7.000000	3.000000	2.000000	66.000000	170.000000	2.000000	2.000000	5.400000	2.000000
+75%	81154.750000	2.000000	3.960000	34.300000	24.300000	81.200000	3.000000	8.000000	3.000000	8.000000	69.000000	200.000000	2.000000	2.000000	5.800000	2.000000
+max	83731.000000	2.000000	5.000000	59.400000	40.100000	162.800000	999.000000	99.000000	3.000000	8.000000	9999.000000	9999.000000	9.000000	9.000000	15.400000	9.000000
+# outlier 처리
+
+df = df[np.logical_or(df['Alcohol'] < 100, df['Alcohol'].isna())] # 값이 100 이상이면 drop
+df = df[np.logical_or(df['Height'] < 400, df['Height'].isna())] # 값이 400 이상이면 drop
+df = df[np.logical_or(df['Weight'] < 400, df['Weight'].isna())] # 값이 400 이상이면 drop
+df = df[np.logical_or(df['Sleep_time'] < 20, df['Sleep_time'].isna())] # 값이 20 이상이면 drop
+
+
+df = df[df['Family_history_of_asthma'] < 3] # 값이 3 이상이면 drop (1, 2만 남김)
+df = df[df['Family_history_of_diabetes'] < 3] # 값이 3 이상이면 drop (1, 2만 남김)
+df = df[df['Diabetes'] < 3] # 값이 3 이상이면 drop (1, 2만 남김)
+
+
+# 0: 아님, 1: 맞음
+# 1->0, 2->1로 mapping
+mapping_dict = {1: 0, 2: 1}
+df['Gender'] = df['Gender'].map(mapping_dict)
+df['Family_history_of_asthma'] = df['Family_history_of_asthma'].map(mapping_dict)
+df['Family_history_of_diabetes'] = df['Family_history_of_diabetes'].map(mapping_dict)
+df['Diabetes'] = df['Diabetes'].map(mapping_dict)
+
+df['Smoke'] = df['Smoke'].map({1: 0, 2: 1, 3: 1})
+
+
+df.describe()
+ID	Gender	Family_income	ArmCircum	SaggitalAbdominal	GripStrength	Alcohol	Sleep_time	Smoke	Video_game	Height	Weight	Family_history_of_asthma	Family_history_of_diabetes	GlycoHemoglobin	Diabetes
+count	4854.000000	4854.000000	4505.000000	4687.000000	3778.000000	3996.000000	3087.000000	4852.000000	2232.000000	4854.000000	4839.000000	4832.000000	4854.000000	4854.000000	3446.000000	4854.000000
+mean	78695.738978	0.520602	2.525978	28.923021	21.044706	63.078954	2.647554	6.895919	0.615591	3.282859	66.404422	177.626863	0.797487	0.599918	5.631747	0.872888
+std	2907.370941	0.499627	1.655425	7.821652	5.003889	25.268325	2.336732	1.415266	0.486564	3.227504	4.122693	45.862525	0.401914	0.489965	0.992449	0.333132
+min	73557.000000	0.000000	0.000000	10.400000	10.100000	8.000000	1.000000	2.000000	0.000000	0.000000	48.000000	75.000000	0.000000	0.000000	3.500000	0.000000
+25%	76226.250000	0.000000	1.050000	23.500000	17.300000	45.475000	1.000000	6.000000	0.000000	0.000000	63.000000	145.000000	1.000000	0.000000	5.200000	1.000000
+50%	78724.000000	1.000000	2.140000	29.600000	20.600000	60.500000	2.000000	7.000000	1.000000	2.000000	66.000000	170.000000	1.000000	1.000000	5.400000	1.000000
+75%	81136.750000	1.000000	4.160000	34.200000	24.300000	81.200000	3.000000	8.000000	1.000000	8.000000	69.000000	200.000000	1.000000	1.000000	5.800000	1.000000
+max	83731.000000	1.000000	5.000000	59.400000	40.100000	161.700000	25.000000	12.000000	1.000000	8.000000	81.000000	391.000000	1.000000	1.000000	15.400000	1.000000
+Missing vaule 처리
+# missing vaule 몇개인지 확인
+for column in df.columns:
+    null_count = df[column].isnull().sum()
+    print("{}: {}".format(column, null_count))
+ID: 0
+Gender: 0
+Family_income: 349
+ArmCircum: 167
+SaggitalAbdominal: 1076
+GripStrength: 858
+Alcohol: 1767
+Sleep_time: 2
+Smoke: 2622
+Video_game: 0
+Height: 15
+Weight: 22
+Family_history_of_asthma: 0
+Family_history_of_diabetes: 0
+GlycoHemoglobin: 1408
+Diabetes: 0
+# Missing vaule 채우기
+# categorical data는 위에서 처리했기 때문에
+# 남은 데이터는 numerical data임
+# 따라서 median으로 missing value 를 채움 
+  
+df['Family_income'] = df['Family_income'].fillna(df['Family_income'].median())
+df['SaggitalAbdominal'] = df['SaggitalAbdominal'].fillna(df['SaggitalAbdominal'].median())
+df['Alcohol'] = df['Alcohol'].fillna(df['Alcohol'].median())
+df['Sleep_time'] = df['Sleep_time'].fillna(df['SaggitalAbdominal'].median())
+df['ArmCircum'] = df['ArmCircum'].fillna(df['ArmCircum'].median())
+df['GripStrength'] = df['GripStrength'].fillna(df['GripStrength'].median())
+df['Height'] = df['Height'].fillna(df['Height'].median())
+df['Weight'] = df['Weight'].fillna(df['Weight'].median())
+# df['GlycoHemoglobin'] = df['GlycoHemoglobin'].fillna(df['GlycoHemoglobin'].median())
+
+
+# Smoke는 ffill로 채움
+df['Smoke'] = df['Smoke'].fillna(method='ffill')
+GlycoHemoglobin을 채우기 위해 어떤 모델을 사용할지 검증
+import matplotlib.pyplot as plt
+
+# Specify the column to visualize
+column_name = 'GlycoHemoglobin'
+
+# Plot a histogram
+plt.hist(df[column_name], bins=20)
+plt.xlabel(column_name)
+plt.ylabel('Frequency')
+plt.title('Distribution of ' + column_name)
+plt.show()
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+
+# Define the target and feature columns
+target_column = 'GlycoHemoglobin'
+feature_columns = [column for column in df.columns if column != target_column and column != 'Diabetes']
+
+# Split the data into missing and non-missing target values
+df_missing = df[df[target_column].isnull()]
+df_not_missing = df[df[target_column].notnull()]
+
+# Prepare the training data
+X_train = df_not_missing[feature_columns]
+y_train = df_not_missing[target_column]
+
+# Perform train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=423)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Initialize the regressor models
+regressors = {
+    "Linear Regression": LinearRegression(),
+    "Decision Tree Regression": DecisionTreeRegressor(),
+    "Random Forest Regression": RandomForestRegressor()
+}
+
+# Perform cross-validation and evaluate performance metrics for each regressor
+results = {}
+for name, regressor in regressors.items():
+    regressor.fit(X_train, y_train)  # Train the regressor on the training data
+    y_pred = regressor.predict(X_test)  # Make predictions on the testing data
+    mse = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    accuracy = regressor.score(X_test, y_test)  # Compute the accuracy score
+    results[name] = {'MSE': mse, 'MAE': mae, 'R-squared': r2, 'Accuracy': accuracy}
+
+# Display the performance results
+performance_df = pd.DataFrame(results)
+print(performance_df)
+           Linear Regression  Decision Tree Regression  \
+MSE                 0.929103                  1.641029   
+MAE                 0.544016                  0.750290   
+R-squared           0.113486                 -0.565805   
+Accuracy            0.113486                 -0.565805   
+
+           Random Forest Regression  
+MSE                        0.982730  
+MAE                        0.587581  
+R-squared                  0.062318  
+Accuracy                   0.062318  
+x = np.linspace(0, len(y_test), len(y_test))
+
+# Plot the actual values
+plt.figure(figsize=(12, 8))
+plt.scatter(x, y_test, color='blue', label='Actual Values')
+
+# Plot the model predictions
+for name, regressor in regressors.items():
+    regressor.fit(X_train, y_train)  # Train the regressor on the training data
+    y_pred = regressor.predict(X_test)  # Make predictions on the testing data
+    plt.plot(x, y_pred, label=name)
+
+plt.xlabel('Data Points')
+plt.ylabel('GlycoHemoglobin')
+plt.title('Actual Values vs Model Predictions')
+plt.legend()
+plt.show()
+
+Linear tRegressor 이용해서 GlycoHemoglobin(당화혈색소) 채우기
+from sklearn.linear_model import LinearRegression
+
+# Function to fill missing values ​​using linear regression
+def fill_missing_with_linear_regression(df, target_column):
+    # Separate the data into rows with and without missing values ​​in target_column
+    df_missing = df[df[target_column].isnull()]
+    df_not_missing = df[df[target_column].notnull()]
+
+    # Prepare feature and target data to train linear regression
+    feature_columns = []
+    for column in df.columns:
+        if column != target_column and column != 'Diabetes': # Exclude target column and add to feature_columns
+            feature_columns.append(column)
+    
+    X_train = df_not_missing[feature_columns]
+    y_train = df_not_missing[target_column]
+
+    # Linear regression training
+    regressor = LinearRegression()
+    regressor.fit(X_train, y_train)
+
+    # Predict using linear regression to fill in missing values
+    X_missing = df_missing[feature_columns]
+    y_missing = regressor.predict(X_missing)
+
+    # Fill missing values ​​with predicted values
+    df.loc[df[target_column].isnull(), target_column] = y_missing
+
+    return df
+
+# Specify column to fill in missing value
+target_column = 'GlycoHemoglobin'
+
+# Fill in missing values ​​using linear regression
+df = fill_missing_with_linear_regression(df, target_column)
+# Missing vaule 없는 것 확인
+for column in df.columns:
+    null_count = df[column].isnull().sum()
+    print("{}: {}".format(column, null_count))
+ID: 0
+Gender: 0
+Family_income: 0
+ArmCircum: 0
+SaggitalAbdominal: 0
+GripStrength: 0
+Alcohol: 0
+Sleep_time: 0
+Smoke: 0
+Video_game: 0
+Height: 0
+Weight: 0
+Family_history_of_asthma: 0
+Family_history_of_diabetes: 0
+GlycoHemoglobin: 0
+Diabetes: 0
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Get the number of columns in the DataFrame
+num_columns = len(df.columns)
+
+# Calculate the number of rows and columns for subplots
+num_rows = (num_columns + 2) // 3
+num_cols = min(num_columns, 3)
+
+# Create subplots with the specified layout
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 15))
+
+# Iterate over the columns and create box plots
+for idx, column in enumerate(df.columns):
+    ax = axs[idx // num_cols, idx % num_cols]
+    sns.boxplot(x=df[column], ax=ax)
+    ax.set_xlabel(column)
+    # ax.set_title('Box Plot of {}'.format(column))
+
+# Remove empty subplots if necessary
+if num_columns % 3 != 0:
+    for idx in range(num_columns, num_rows * num_cols):
+        fig.delaxes(axs.flatten()[idx])
+
+# Adjust the spacing between subplots
+fig.tight_layout()
+
+# Show the plots
+plt.show()
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Get the number of columns in the DataFrame
+num_columns = len(df.columns)
+
+# Calculate the number of rows and columns for subplots
+num_rows = (num_columns + 2) // 3
+num_cols = min(num_columns, 3)
+
+# Create subplots with the specified layout
+fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 5 * num_rows))
+
+# Iterate over the columns and create distribution plots
+for idx, column in enumerate(df.columns):
+    ax = axs[idx // num_cols, idx % num_cols]
+    sns.distplot(df[column], kde=False, ax=ax)
+    ax.set_xlabel(column)
+    ax.set_ylabel('Frequency')
+    # ax.set_title('Distribution of {}'.format(column))
+
+# Remove empty subplots if necessary
+if num_columns % 3 != 0:
+    for idx in range(num_columns, num_rows * num_cols):
+        fig.delaxes(axs.flatten()[idx])
+
+# Adjust the spacing between subplots
+fig.tight_layout()
+
+# Show the plots
+plt.show()
+
+count_A = df['Family_history_of_asthma'].value_counts() 
+print(count_A)
+1    3871
+0     983
+Name: Family_history_of_asthma, dtype: int64
+count_A = df['Family_history_of_diabetes'].value_counts() 
+print(count_A)
+1    2912
+0    1942
+Name: Family_history_of_diabetes, dtype: int64
+count_A = df['Smoke'].value_counts() 
+print(count_A)
+1.0    3020
+0.0    1834
+Name: Smoke, dtype: int64
+colormap = plt.cm.viridis
+plt.figure(figsize=(20,20))
+sns.heatmap(df.astype(float).drop(axis=1, labels='ID').corr(), linewidths=0.1, vmax=1.0, square=True, cmap=colormap, annot=True)
+<Axes: >
+
+from sklearn import linear_model
+from sklearn.svm import SVC
+from sklearn.model_selection import KFold
+from sklearn.metrics import mean_squared_error, r2_score
+# df.drop(['GlycoHemoglobin'], axis = 1, inplace=True)
+
+df.describe()
+ID	Gender	Family_income	ArmCircum	SaggitalAbdominal	GripStrength	Alcohol	Sleep_time	Smoke	Video_game	Height	Weight	Family_history_of_asthma	Family_history_of_diabetes	GlycoHemoglobin	Diabetes
+count	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000	4854.000000
+mean	78695.738978	0.520602	2.498226	28.946312	20.946127	62.623094	2.411825	6.901566	0.622167	3.282859	66.403173	177.592295	0.797487	0.599918	5.650507	0.872888
+std	2907.370941	0.499627	1.597905	7.686886	4.418308	22.947177	1.889256	1.442052	0.484895	3.227504	4.116378	45.761321	0.401914	0.489965	0.852949	0.333132
+min	73557.000000	0.000000	0.000000	10.400000	10.100000	8.000000	1.000000	2.000000	0.000000	0.000000	48.000000	75.000000	0.000000	0.000000	3.500000	0.000000
+25%	76226.250000	0.000000	1.110000	23.900000	18.300000	49.400000	2.000000	6.000000	0.000000	0.000000	63.000000	145.000000	1.000000	0.000000	5.200000	1.000000
+50%	78724.000000	1.000000	2.140000	29.600000	20.600000	60.500000	2.000000	7.000000	1.000000	2.000000	66.000000	170.000000	1.000000	1.000000	5.500000	1.000000
+75%	81136.750000	1.000000	3.920000	34.000000	23.100000	75.100000	2.000000	8.000000	1.000000	8.000000	69.000000	200.000000	1.000000	1.000000	5.900000	1.000000
+max	83731.000000	1.000000	5.000000	59.400000	40.100000	161.700000	25.000000	20.600000	1.000000	8.000000	81.000000	391.000000	1.000000	1.000000	15.400000	1.000000
+from sklearn.model_selection import train_test_split
+
+#data -> attributes, target -> diabetes
+X = df.iloc[:,:-1]
+
+y = df.iloc[:,-1]
+y.describe()
+count    4854.000000
+mean        0.872888
+std         0.333132
+min         0.000000
+25%         1.000000
+50%         1.000000
+75%         1.000000
+max         1.000000
+Name: Diabetes, dtype: float64
+SMOTE 이용해서 당뇨 데이터 over sampling
+from imblearn.over_sampling import SMOTE
+X, y = SMOTE().fit_resample(X, y)
+pd.Series(y).value_counts().plot(kind='bar', title='Class distribution after appying SMOTE')
+<Axes: title={'center': 'Class distribution after appying SMOTE'}>
+
+본격적인 당뇨예측
+from sklearn.preprocessing import StandardScaler
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=423)
+
+
+# Create an instance of the StandardScaler
+scaler = StandardScaler()
+
+# Fit the scaler to the training data and transform the training data
+X_train = scaler.fit_transform(X_train)
+
+# Transform the test data using the fitted scaler
+X_test = scaler.transform(X_test)
+
+
+#create linear regression obj
+lr_regr = linear_model.LinearRegression()
+
+#training via linear regression model
+lr_regr.fit(X_train, y_train)
+
+#make prediction using the test set
+lr_pred_diabetes = lr_regr.predict(X_test)
+lr_score = lr_regr.score(X_test, y=y_test)
+
+print('LRr_Coefficients: ', lr_regr.coef_)
+print('LR_Mean Square Error: %.2f' % mean_squared_error(y_test, lr_pred_diabetes))
+print('LR_Variance score: %.2f' % r2_score(y_test, lr_pred_diabetes))
+print('Score: %.2f' % lr_regr.score(X_test, y_test))
+LRr_Coefficients:  [ 0.02545007  0.13279212  0.00655684 -0.00804365  0.00967814 -0.0013416
+  0.0474005  -0.02386634 -0.02340542 -0.04377998  0.1163834  -0.08528771
+  0.02347899  0.23072087 -0.002707  ]
+LR_Mean Square Error: 0.15
+LR_Variance score: 0.41
+Score: 0.41
+from sklearn.cluster import KMeans
+kms = KMeans(n_clusters = 3, tol = 0.0005, algorithm="auto")
+
+kms.fit_predict(X_train)
+
+print ("parameters: ", kms.get_params)
+print ("preict: ", kms.predict)
+print ("\nscore: %.2f" % kms.score(X_test))
+parameters:  <bound method BaseEstimator.get_params of KMeans(algorithm='auto', n_clusters=3, tol=0.0005)>
+preict:  <bound method _BaseKMeans.predict of KMeans(algorithm='auto', n_clusters=3, tol=0.0005)>
+
+score: -21336.90
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import cross_val_score
+
+#create adaboost classification obj
+ab_clf = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(), n_estimators=100, 
+                            learning_rate=0.5, random_state=100)
+
+#training via adaboost classficiation model
+ab_clf.fit(X_train, y_train)
+print("training....\n")
+
+#make prediction using the test set
+ab_pred_diabetes = ab_clf.predict(X_test)
+print('prediction: \n', ab_pred_diabetes)
+
+print('\nparms: \n', ab_clf.get_params)
+
+#predict probability
+#print('predict probability: %.2f' % ab_clf.staged_score(test_X, ab_pred_diabetes))
+
+#score
+ab_clf_score = ab_clf.score(X_test, y_test)
+print("\nmean accuracy: %.2f" % ab_clf.score(X_test, y_test))
+training....
+
+prediction: 
+ [0 0 0 ... 0 0 0]
+
+parms: 
+ <bound method BaseEstimator.get_params of AdaBoostClassifier(base_estimator=DecisionTreeClassifier(), learning_rate=0.5,
+                   n_estimators=100, random_state=100)>
+
+mean accuracy: 0.86
+from sklearn.ensemble import BaggingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+bagging = BaggingClassifier(base_estimator= DecisionTreeClassifier(), max_samples = 0.5, max_features = 0.5, 
+                            bootstrap = False, bootstrap_features = False)
+
+bagging.fit(X_train, y_train)
+bg_pred_diabetes = bagging.predict(X_test)
+
+bg_dt_score = bagging.score(X_test, y_test)
+bagging.score(X_test, y_test)
+0.928023598820059
+bagging = BaggingClassifier(base_estimator= KNeighborsClassifier(), max_samples = 0.5, max_features = 0.5, 
+                            bootstrap = False, bootstrap_features = False)
+
+bagging.fit(X_train, y_train)
+bg_pred_diabetes = bagging.predict(X_test)
+
+bg_score = bagging.score(X_test, y_test)
+bagging.score(X_test, y_test)
+0.8595870206489675
+from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+
+boosting = GradientBoostingClassifier(max_depth=3, n_estimators=100, learning_rate=0.1)
+
+boosting.fit(X_train, y_train)
+boost_pred_diabetes = boosting.predict(X_test)
+
+boost_score = boosting.score(X_test, y_test)
+print("Gradient Boosting Classifier 정확도:", boost_score)
+Gradient Boosting Classifier 정확도: 0.9162241887905604
+각 모델의 정확도 비교
+d = {'Model': ['Linear Regression', 'Adaboost', 'Bagging_decision tree based', 'Bagging_KNeighbors', 'Gradient Boosting'],
+     'accuracy' : [lr_score, ab_clf_score, bg_dt_score, bg_score, boost_score]}
+
+result_df = pd.DataFrame(data = d)
+result_df
+Model	accuracy
+0	Linear Regression	0.408284
+1	Adaboost	0.864897
+2	Bagging_decision tree based	0.928024
+3	Bagging_KNeighbors	0.859587
+4	Gradient Boosting	0.916224
+result_df.plot(x='Model', y='accuracy', kind='bar', figsize=(8, 8), title='Diabetes Prediction Accuracy', 
+               sort_columns=True)
+<Axes: title={'center': 'Diabetes Prediction Accuracy'}, xlabel='Model'>
+
+K Fold
+
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import KFold
+from sklearn.metrics import accuracy_score
+
+boosting = GradientBoostingClassifier(max_depth=3, n_estimators=100, learning_rate=0.1)
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+# K-fold 교차 검증 수행
+scores = []
+for train_index, test_index in kf.split(X):
+    X_train, X_test = X.iloc[train_index,:], X.iloc[test_index,:]
+    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+    boosting.fit(X_train, y_train)
+    y_pred = boosting.predict(X_test)
+    score = accuracy_score(y_test, y_pred)
+    scores.append(score)
+
+# 각 폴드의 정확도 출력
+for fold, score in enumerate(scores, 1):
+    print(f"폴드 {fold} 정확도: {score:.4f}")
+
+# 평균 정확도 계산
+mean_score = sum(scores) / len(scores)
+print(f"평균 정확도: {mean_score:.4f}")
+폴드 1 정확도: 0.9080
+폴드 2 정확도: 0.8915
+폴드 3 정확도: 0.9092
+폴드 4 정확도: 0.9245
+폴드 5 정확도: 0.9174
+폴드 6 정확도: 0.9138
+폴드 7 정확도: 0.9268
+폴드 8 정확도: 0.8831
+폴드 9 정확도: 0.9008
+폴드 10 정확도: 0.9044
+평균 정확도: 0.9080
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import KFold
+from sklearn.metrics import accuracy_score
+
+boosting = GradientBoostingClassifier(max_depth=3, n_estimators=100, learning_rate=0.1)
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+scores = []
+for train_index, test_index in kf.split(X):
+    X_train, X_test = X.iloc[train_index,:], X.iloc[test_index,:]
+    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+    boosting.fit(X_train, y_train)
+    y_pred = boosting.predict(X_test)
+    score = accuracy_score(y_test, y_pred)
+    scores.append(score)
+
+mean_score = sum(scores) / len(scores)
+print("Gradient Boosting Classifier 평균 정확도:", mean_score)
+Gradient Boosting Classifier 평균 정확도: 0.9054753023860023
